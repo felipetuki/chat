@@ -36,13 +36,15 @@ html,body{height:100%;background:#0e0e12;color:#f2f2f5;font-family:system-ui,-ap
 <input id="key" type="password" placeholder="chave da API" autocomplete="off">
 <input id="model" type="text" placeholder="modelo" autocomplete="off">
 <textarea id="ctx" rows="2" placeholder="Contexto: jogo/assunto da live (opcional)"></textarea>
+<h2>Perguntas do chat</h2><div class="chips" id="askC"></div>
+<h2>Puxar assunto se eu ficar calado</h2><div class="chips" id="quietC"></div>
 <p id="aiSt">IA desligada.</p>
 <h2>Outros</h2><div class="chips" id="oC"></div>
 <br><button class="chip on" id="close">Fechar</button>
 </div>
 <script>
 const NAMES=[["Luna_Curiosa","#b794ff"],["Dex_Zoeira","#ff9a5c"],["Bia_Hype","#4fe3b0"],["Prof_Fatos","#6ec1ff"],["Zen_Filosofo","#a0e06a"],["Capitao_Desafio","#ff6b81"],["Plantao_News","#ffd166"],["Tio_Nostalgia","#d29bff"]];
-const FILL=["kkkk","kkkkkk","boa","mds","f","nice","eita","verdade","pqp","lindo","tmj","isso aí","sdds","kkkkkkk","hmm","aff","po","sério","real"];
+const FILL=["kkkk","kkkkkkkk","kkkkkkkkkkkk","KKKKKKKKK","boa","mds","f","lol","eita","pqp","oloko","slk","crl","ué","bro","nice","gg","kkkkk","aff","real"];
 const PACES={calmo:[55,100],normal:[25,55],agitado:[10,25]};
 const $=id=>document.getElementById(id);
 const KEY='chatpriv_v6';
@@ -73,22 +75,31 @@ chip($('oC'),'🔆 Tela ligada',true,b=>{awake=!awake;b.classList.toggle('on',aw
 // ===== IA: ouve sua voz e responde como chat =====
 const AIKEY='chatpriv_ai_v1';
 const DEF={gemini:'gemini-3.1-flash-lite',claude:'claude-haiku-5-5'};
-let ai={on:false,prov:'gemini',key:'',ctx:'',model:''},heard='',sent=0,busy=false,lastCall=0,rec=null,recOn=false,recent=[];
+let ai={on:false,prov:'gemini',key:'',ctx:'',model:'',ask:'poucas',quiet:25},heard='',sent=0,busy=false,lastCall=0,rec=null,recOn=false,recent=[];
 try{Object.assign(ai,JSON.parse(localStorage.getItem(AIKEY)||'{}'));ai.on=false;}catch(e){}
-const saveAi=()=>{try{localStorage.setItem(AIKEY,JSON.stringify({prov:ai.prov,key:ai.key,ctx:ai.ctx,model:ai.model}));}catch(e){}};
+const saveAi=()=>{try{localStorage.setItem(AIKEY,JSON.stringify({prov:ai.prov,key:ai.key,ctx:ai.ctx,model:ai.model,ask:ai.ask,quiet:ai.quiet}));}catch(e){}};
 const aiMsg=t=>{$('aiSt').textContent=t;};
 const GAP={calmo:10,normal:6,agitado:4};
 let sig=null,lastResultAt=Date.now();
 let retryT=null;
+const ASKTXT={
+  poucas:'PERGUNTA: só ~8% das mensagens, curtas e práticas ("tá no ps5 normal?", "vai jogar até que horas?", "qual o nome do jacaré?"), nunca filosóficas.',
+  normal:'PERGUNTA: em toda resposta inclua 1 pergunta curta direcionada ao streamer, CONTEXTUALIZADA no que ele acabou de dizer ou fazer (ex.: "por que escolheu esse carro?", "e agora vai fazer o quê?", "já tinha jogado o anterior?"). As outras mensagens continuam comentários normais. Nada de pergunta genérica ou filosófica.',
+  muitas:'PERGUNTA: em toda resposta inclua de 1 a 2 perguntas curtas direcionadas ao streamer, bem específicas ao que ele acabou de dizer ou fazer, para ele continuar falando; pode ter um usuário insistindo ("responde aí"). Nada de pergunta genérica ou filosófica.'};
 function sysPrompt(){
   const names=[...enabled].map(i=>NAMES[i][0]).join(', ');
-  return `Você simula o chat de uma live da Twitch brasileira, em pt-BR, que SÓ o streamer vê (é um chat de companhia declarado, não finge ser audiência real). Escreva mensagens como espectadores reais:
-- mensagens MUITO curtas: mediana 2 a 3 palavras, quase nunca mais de 8; metade das vezes 1 a 3 palavras
-- minúsculas, SEM ponto final, gíria: kkkk, mds, pqp, mano, cara, vc, q, pq, tmj, sdds, eita, boa, f, nice, gg, lindo
-- ~15% risada (kkkk), às vezes letra esticada (aaaa, loooongo), no máximo 1 pergunta a cada 8 mensagens
-- reaja ao que o streamer DISSE: concorde, tire sarro, lembre de algo, comente o jogo, o assunto, comida, nostalgia
-- varie os usuários; um pode responder o outro; nada de frases de efeito, constatação filosófica nem texto longo
-- nunca repita o que já foi dito no chat recente
+  return `Você simula o chat de uma live da Twitch brasileira, em pt-BR, que SÓ o streamer vê (é um chat de companhia declarado, não finge ser audiência real). As mensagens devem parecer pessoas reais digitando rápido. Medido em ~76 mil mensagens de chats reais:
+TAMANHO: 27% das mensagens têm 1 palavra, 55% até 3 palavras, 35% de 4 a 8, só 10% passam de 9 (e essas são uma observação ou piada). Quase nunca mais de 12 palavras.
+ESCRITA: minúsculas, sem ponto final (só 6% terminam em pontuação), gírias (mds, pqp, mano, cara, vc, q, pq, tmj, eita, oloko, slk, crl, f, lol, boa, nice), sem acento às vezes.
+RISADA: quando há motivo, ela vem em tamanhos variados ("kkk", "kkkkkkkkkkkk", "KKKKKKKKKK"), muitas vezes colada ao assunto ("kkkkk o jacaré", "kkkk q isso"). Em chats reais ~18% das mensagens são risada, mas SÓ em reação a algo engraçado, estranho ou errado que acabou de acontecer.
+GRITO: ~9% em CAIXA ALTA, quando algo surpreende ou engraça ("O JACARÉ", "NAO É POSSIVEL", "KKKKKKK SE FUDEU").
+SUGESTÃO: ~7% são ordens/sugestões ao streamer, no imperativo ("faz uma bolsa", "leva pra casa", "joga ele na água", "pega", "olha", "vende", "usa a picape").
+RESPOSTA: ~7% respondem outro espectador com @ ("@Dex_Zoeira verdade kkkk") ou continuam a piada dele.
+${ASKTXT[ai.ask]||ASKTXT.poucas}
+CONTEÚDO: o chat comenta o que o streamer ACABOU de dizer ou fazer, usando as palavras concretas dele (objeto, personagem, lugar, comida, jogo). Concorde, tire sarro, brinque com o erro dele, lembre algo de outro jogo, repita a piada de outro espectador, faça um trocadilho. Também aparecem: "lol", "F" quando algo dá errado, "gg", "boa" quando acerta, e de vez em quando brincadeira com o próprio chat parado ("chat tá mudo hoje").
+RITMO: respostas de 2 a 6 mensagens; quando algo é engraçado, rajada de risadas de usuários diferentes; quando é calmo, 2 ou 3 mensagens soltas.
+CONTEXTO OBRIGATÓRIO: toda mensagem precisa ter motivo no que o streamer acabou de dizer ou fazer. NUNCA mande risada, \"f\", \"eita\", \"boa\" ou qualquer reação de enchimento se o que ele disse foi banal. Se a fala não rende reação, comente o conteúdo dela de forma específica, faça uma pergunta específica, ou responda com um array vazio []. Cada mensagem tem que dar pra ligar a algo concreto dito por ele.
+PROIBIDO: frase de efeito, constatação filosófica, texto longo, ponto final, repetir algo já dito no chat recente, explicar a piada.
 Usuários disponíveis: ${names}.
 Contexto da live: ${ai.ctx||'(não informado)'}.
 Responda APENAS um array JSON, de 3 a 6 itens: [{"u":"Nome_Do_Usuario","t":"mensagem"}]`;
@@ -139,18 +150,21 @@ async function geminiStream(model,user){
   }
   return n;
 }
-async function aiTurn(){
+let lastAsk=0;
+async function aiTurn(forceAsk){
   if(!ai.on||busy||!ai.key)return;
-  const text=(heard.slice(sent)+' '+interimTxt).trim();
-  if(text.length<10)return;
+  let text=(heard.slice(sent)+' '+interimTxt).trim();
+  if(forceAsk===true){text=heard.trim().slice(-400);if(!text&&!ai.ctx)return;lastAsk=Date.now();}
+  else if(text.length<10)return;
   const wait=GAP[pace]*1000-(Date.now()-lastCall);
   if(wait>0){clearTimeout(retryT);retryT=setTimeout(aiTurn,wait+50);return;}
   busy=true;lastCall=Date.now();sent=heard.length;skipChars=interimTxt.length;interimTxt='';
   const ac=new AbortController();sig=ac.signal;const to=setTimeout(()=>ac.abort(),15000);   // pedido travado é cancelado em 15s
   clearTimeout(timer);firstOfBatch=true;aiMsg('IA pensando…');$('st').textContent='💭 pensando…';
-  if(Math.random()<.6)enqueue({u:'',t:FILL[Math.floor(Math.random()*FILL.length)]});   // reação instantânea enquanto a IA pensa
   try{
-    const user='Chat recente:\n'+(recent.slice(-10).join('\n')||'(vazio)')+'\n\nO streamer acabou de falar: "'+text.slice(-400)+'"';
+    const user='Chat recente:\n'+(recent.slice(-10).join('\n')||'(vazio)')+(forceAsk===true
+      ?'\n\nO streamer ficou calado há um tempo. O que ele falou por último: "'+(text||ai.ctx)+'". Mande 2 a 4 mensagens, e pelo menos UMA delas deve ser uma pergunta curta e específica a ele sobre isso, pra ele voltar a falar.'
+      :'\n\nO streamer acabou de falar: "'+text.slice(-400)+'"');
     const model=ai.model||DEF[ai.prov];let n=0;
     if(ai.prov==='gemini')n=await geminiStream(model,user);
     else{
@@ -160,7 +174,7 @@ async function aiTurn(){
       const j=await r.json();const raw=(j.content&&j.content[0]&&j.content[0].text)||'';
       const [o]=extract(raw,0);o.slice(0,6).forEach(x=>{n++;enqueue(x);});
     }
-    if(!n)throw new Error('resposta vazia');
+    // n=0 é válido: a fala não rendeu nada pro chat reagir
     aiMsg('IA ligada · ouvindo');$('st').textContent='🎤 ouvindo';
   }catch(e){aiMsg('Erro da IA ('+e.message+'). Tente de novo na próxima fala.');$('st').textContent='⚠ IA falhou: '+e.message;schedScript();}
   clearTimeout(to);busy=false;
@@ -185,6 +199,7 @@ function startMic(){
 setInterval(()=>{   // ouve sempre: dispara assim que há fala nova, sem depender de novo evento do microfone
   if(!ai.on)return;
   if(!busy)aiTurn();
+  if(ai.quiet>0&&!busy&&Date.now()-Math.max(lastResultAt,lastShow,lastAsk)>ai.quiet*1000&&heard.length-sent<10)aiTurn(true);   // streamer calado: o chat puxa assunto com pergunta
   if(recOn&&Date.now()-lastResultAt>45000){lastResultAt=Date.now();try{rec.stop();}catch(e){}}   // microfone mudo há 45s: reinicia (onend religa)
 },700);
 function setAi(on){
@@ -196,6 +211,8 @@ function setAi(on){
 }
 let aiBtn=null;
 function bindAi(){
+  const ab=[['poucas','Poucas'],['normal','Normal'],['muitas','Muitas']].map(([k,l])=>({k,b:chip($('askC'),l,k===ai.ask,()=>{ai.ask=k;ab.forEach(x=>x.b.classList.toggle('on',x.k===k));saveAi();})}));
+  const qb=[[0,'Desligado'],[15,'15 s'],[25,'25 s'],[45,'45 s'],[90,'90 s']].map(([k,l])=>({k,b:chip($('quietC'),l,k===ai.quiet,()=>{ai.quiet=k;qb.forEach(x=>x.b.classList.toggle('on',x.k===k));saveAi();})}));
   $('key').value=ai.key;$('ctx').value=ai.ctx;$('model').value=ai.model;
   $('model').oninput=()=>{ai.model=$('model').value.trim();saveAi();};
   const pv=[['gemini','🆓 Gemini (grátis)'],['claude','Claude (pago)']].map(([k,l])=>({k,b:chip($('provC'),l,k===ai.prov,()=>{ai.prov=k;ai.model='';$('model').value='';$('model').placeholder='modelo (padrão: '+DEF[k]+')';pv.forEach(x=>x.b.classList.toggle('on',x.k===k));saveAi();})}));

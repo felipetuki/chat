@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Chat privado</title>
+<title>Chat privado (IA)</title>
 <style>
 *{box-sizing:border-box;margin:0}
 html,body{height:100%;background:#0e0e12;color:#f2f2f5;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -24,107 +24,30 @@ html,body{height:100%;background:#0e0e12;color:#f2f2f5;font-family:system-ui,-ap
 #aiSt{font-size:13px;color:#8d8d99;margin-top:8px}
 .chip.on{background:#7c5cff}.chip.off{opacity:.4}
 </style></head><body>
-<div id="top"><span id="st">chat privado · só você vê</span><span><button id="skip">⏭</button><button id="pp">⏸</button><button id="gear">⚙</button></span></div>
+<div id="top"><span id="st">chat privado · só você vê</span><span><button id="skip">🧹</button><button id="pp">⏸</button><button id="gear">⚙</button></span></div>
 <div id="feed"></div>
-<div id="start"><h1>💬 Chat privado</h1><p>Mensagens de personagens que só aparecem pra você. Mensagens curtas, em conversa, como um chat de verdade.</p><button id="go">Começar</button></div>
+<div id="start"><h1>💬 Chat privado</h1><p>Chat de companhia que só você vê. Ele ouve o que você fala e reage em mensagens curtas, como um chat de verdade. Precisa da chave da API (Ajustes).</p><button id="go">Começar</button></div>
 <div id="sheet" hidden>
-<h2>Ritmo do chat</h2><div class="chips" id="paceC"></div>
+<h2>Frequência das respostas</h2><div class="chips" id="paceC"></div>
 <h2>Personagens</h2><div class="chips" id="pC"></div>
-<h2>Assuntos</h2><div class="chips" id="cC"></div>
 <h2>IA (reage ao que você fala)</h2>
 <div class="chips" id="aiC"></div>
 <div class="chips" id="provC"></div>
 <input id="key" type="password" placeholder="chave da API" autocomplete="off">
 <input id="model" type="text" placeholder="modelo" autocomplete="off">
 <textarea id="ctx" rows="2" placeholder="Contexto: jogo/assunto da live (opcional)"></textarea>
-<p id="aiSt">IA desligada: usando só o roteiro.</p>
+<p id="aiSt">IA desligada.</p>
 <h2>Outros</h2><div class="chips" id="oC"></div>
 <br><button class="chip on" id="close">Fechar</button>
 </div>
 <script>
-const SC = [
-// atual
-{c:'atual',a:'1118',b:'1119',l:["gta 6 sai amanhã mds","meia noite né","vai travar tudo kkkk","212gb pqp","meu ssd tá chorando"]},
-{c:'atual',a:'1118',b:'1120',l:["quem vai virar a noite pro gta","eu 😭","tenho trampo amanhã mas foda-se","kkkkkk","vai ser lembrado"]},
-{c:'atual',a:'1118',b:'1125',l:["só ps5 e xbox né","pc fica pra depois","sofrimento","jogo no do primo kkk","eita"]},
-{c:'atual',a:'1101',b:'1130',l:["black friday dia 27","já tô de olho em umas coisa","aumenta pra baixar depois kkkk","verdade","pesquisa preço antes"]},
-{c:'atual',l:["twitch agora tem live vertical","vi isso","modo celular tá bom","eu só assisto no celular msm","kkkk"]},
-// jogos
-{c:'jogos',l:["tenho 40 jogo na steam e jogo só um","kkkkk mesma coisa","biblioteca só pra enfeitar","promoção me destrói","pqp é isso"]},
-{c:'jogos',l:["final de jogo sempre dá vontade de chorar","zelda","the last of us","nem fala","já tô emocionado"]},
-{c:'jogos',l:["jogo difícil demais","souls é só raiva","mas vicia","desisti no primeiro chefe kkk","ninguém desiste, só pausa"]},
-{c:'jogos',l:["trilha sonora de jogo é outro nível","mds verdade","ouço no trabalho","zelda e sonic","green hill 🥲"]},
-{c:'jogos',l:["jogo de luta com amigo vira briga","kkkkk","controle voando","já perdi amizade por mario kart","casco azul é crime"]},
-{c:'jogos',l:["mod deixa o jogo bom de novo","skyrim tá na 14ª vez","kkkk","mod de cavalo","skyrim vive pra sempre"]},
-{c:'jogos',l:["speedrun é coisa de louco","faz em 5 min o q levo 20h","kkkk","glitch é arte","assisti ontem, hipnotiza"]},
-{c:'jogos',l:["lag na hora H é sinal pra parar","kkkkkkk","tava no clutch","chorei","sempre"]},
-{c:'jogos',l:["jogo de terror só com a luz acesa","kkkk eu fico no celular","coragem de maluco","jumpscare me mata","aff"]},
-{c:'jogos',l:["boss final sempre dá errado na primeira","ou passa direto","kkkk","comigo são 20 vezes","aí é treino"]},
-{c:'jogos',l:["alguém aqui já zerou 100%","platina é outro nível","eu desisto em 60%","kkkk","tem troféu cruel"]},
-{c:'jogos',l:["mochila do jogo sempre cheia de lixo","kkkk","não vendo nada","vai q precisa","99 poção no inventário"]},
-{c:'jogos',l:["jogo mobile é vício disfarçado","kkkk","gastei 20 no gacha","verdade","e o raro nunca vem"]},
-{c:'jogos',l:["cheat code era vida","konami","kkkk","gta 3 com dinheiro infinito","clássico"]},
-{c:'jogos',l:["cenário bonito de jogo me para","modo foto","vira wallpaper","kkkk","tira print"]},
-{c:'jogos',l:["coop deixa tudo melhor","com amigo","até jogo ruim fica bom","verdade","eita"]},
-{c:'jogos',l:["demo de jogo é a melhor invenção","joga e já sabe","evita arrependimento","kkkk","steam fest vicia"]},
-{c:'jogos',l:["controle com drift todo mundo tem","o meu já vem de fábrica","kkkk","vida de gamer","aff"]},
-{c:'jogos',l:["dublagem br de jogo é muito boa","verdade","dublador é herói","kkkk","tem uns clássico"]},
-{c:'jogos',l:["jogo calmo hoje seria bom","terror não","kkkk","vai de platina","qualquer um tá bom"]},
-// comida
-{c:'comida',l:["pizza fria de manhã é melhor","verdade","com refri","kkkk","comprovado"]},
-{c:'comida',l:["miojo de madrugada","com ovo","com queijo","ai sim","sem tempero nunca"]},
-{c:'comida',l:["hambúrguer caseiro > lanchonete","depende","da minha mãe sim","kkkk","tô com fome agora"]},
-{c:'comida',l:["tô com fome só de ouvir","pede alguma coisa","pastel","pastel de feira mds","com caldo de cana"]},
-{c:'comida',l:["abacaxi na pizza","vai começar","eu como","traidor kkkkk","é bom sim cara"]},
-{c:'comida',l:["leite com achocolatado","nescau ou toddy","toddy","errado","nescau gelado melhor"]},
-{c:'comida',l:["açaí de 1 litro","kkkk","com leite ninho","com banana","com tudo e paga caro"]},
-{c:'comida',l:["lanche de madrugada tem outro gosto","pão com queijo","vira banquete","kkk","nem precisa de recheio"]},
-{c:'comida',l:["café já tomou hoje","3 xícaras","eu 5 kkkk","coração","sem café eu não funciono"]},
-// nostalgia
-{c:'nostalgia',l:["lan house era a vida","1 real a hora","cs e counter","o dono mandando sair kkkk","sdds demais"]},
-{c:'nostalgia',l:["msn tocando nudge","a música de entrada","fotolog","orkut mds","sdds de tudo isso"]},
-{c:'nostalgia',l:["tazo e figurinha","trocava no recreio","tinha o raro","álbum completo era status","kkkk"]},
-{c:'nostalgia',l:["desenho de sábado de manhã","pijama e cereal","tv de tubo","era perfeito","sdds"]},
-{c:'nostalgia',l:["jogo de ps2 emprestado","cd riscado","ficava de castigo","kkkk lembro","memory card cheio"]},
-{c:'nostalgia',l:["pen drive com tudo misturado","música, jogo e trabalho","vírus junto kkkk","sempre","vivia formatando"]},
-{c:'nostalgia',l:["fita de vhs gravada da tv","cortava a propaganda","kkkk","tinha q rebobinar","na casa da vó"]},
-{c:'nostalgia',l:["recreio com game boy","tetris","pokémon","link cable pra trocar","era uma era"]},
-{c:'nostalgia',l:["natal com super nintendo","achava q ia durar pra sempre","dormia jogando","mario world","kkk"]},
-{c:'nostalgia',l:["tela azul no meio do trabalho","kkkk","pior na prova","salvou nada","ctrl s ensinava"]},
-{c:'nostalgia',l:["primeiro jogo q vc jogou","o meu foi mario","pokémon amarelo","sonic","tetris no tijolão"]},
-// vida / live
-{c:'vida',l:["streamer falando sozinho é arte","kkkk","eu tô aqui","sempre tem alguém","continua"]},
-{c:'vida',l:["quem tá ouvindo e trabalhando","eu","eu tbm","kkkk","live de fundo é padrão"]},
-{c:'vida',l:["pausa pra água","hidrata","kkkk","verdade","bebe água rapaz"]},
-{c:'vida',a:'1101',b:'1231',l:["fim de ano chegando","parece que foi ontem","2026 voou","verdade","ainda nem fiz nada kkk"]},
-{c:'vida',l:["clipe engraçado da live já saiu","vai pro twitter","kkkk","corta aquele momento","ficou bom"]},
-{c:'vida',l:["a voz tá ótima hoje","microfone bom","manda o preço","kkkk","aff"]},
-{c:'vida',l:["amiga disse que não gosta de jogo","como assim","existe gente assim","kkkk","tem q apresentar um bom"]},
-{c:'vida',l:["chuva e jogo é combo perfeito","e cobertor","e chocolate quente","kkkk","vida boa"]},
-{c:'vida',l:["sono bate na hora do jogo bom","café","energético","kkk","vai dormir depois"]},
-{c:'vida',l:["terminei o jogo em 1 dia","mentira","tava de férias","kkkk","quem consegue"]},
-{c:'vida',l:["chat parado hoje","tá mais calmo","tô aqui","kkkk","vc fala mais q a gente"]},
-{c:'vida',l:["semana tá longa","sexta chega","falta pouco","kkkk","aguenta"]},
-];
-
 const NAMES=[["Luna_Curiosa","#b794ff"],["Dex_Zoeira","#ff9a5c"],["Bia_Hype","#4fe3b0"],["Prof_Fatos","#6ec1ff"],["Zen_Filosofo","#a0e06a"],["Capitao_Desafio","#ff6b81"],["Plantao_News","#ffd166"],["Tio_Nostalgia","#d29bff"]];
 const FILL=["kkkk","kkkkkk","boa","mds","f","nice","eita","verdade","pqp","lindo","tmj","isso aí","sdds","kkkkkkk","hmm","aff","po","sério","real"];
-const CATS=[["atual","🔥 Rolando agora"],["jogos","🎮 Jogos"],["comida","🍕 Comida"],["nostalgia","📼 Nostalgia"],["vida","🎙️ Papo de live"]];
 const PACES={calmo:[55,100],normal:[25,55],agitado:[10,25]};
 const $=id=>document.getElementById(id);
 const KEY='chatpriv_v6';
-let used=new Set(),pace='normal',enabled=new Set(NAMES.map((_,i)=>i)),catOn=new Set(CATS.map(c=>c[0])),vibrate=true,awake=true,paused=false,started=false,timer=null,lastP=-1,wl=null;
-try{const s=JSON.parse(localStorage.getItem(KEY)||'{}');used=new Set(s.used||[]);}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({used:[...used]}));}catch(e){}};
+let used=new Set(),pace='normal',enabled=new Set(NAMES.map((_,i)=>i)),vibrate=true,awake=true,paused=false,started=false,timer=null,lastP=-1,wl=null;
 const rnd=(a,b)=>a+Math.random()*(b-a);
-function mmdd(){const d=new Date();return String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');}
-const fresh=s=>{const t=mmdd();return t>=(s.a||'0000')&&t<=(s.b||'9999');};
-function pickScene(){
-  let pool=SC.map((s,i)=>[s,i]).filter(([s,i])=>catOn.has(s.c)&&fresh(s)&&!used.has(i));
-  if(!pool.length){SC.forEach((s,i)=>used.delete(i));pool=SC.map((s,i)=>[s,i]).filter(([s])=>catOn.has(s.c)&&fresh(s));}
-  if(!pool.length)return null;
-  const [s,i]=pool[Math.floor(Math.random()*pool.length)];used.add(i);save();return s;
-}
 function pickP(){
   const e=[...enabled];let p;let g=0;
   do{p=e[Math.floor(Math.random()*e.length)];}while(e.length>1&&p===lastP&&++g<20);
@@ -139,29 +62,13 @@ function addMsg(p,text){
   const n=f.children.length;[...f.children].forEach((c,i)=>{c.classList.toggle('old',i===n-3);c.classList.toggle('older',i<n-3);});
 }
 function delay(t){return Math.max(1100,Math.min(5500,500+t.length*95))+rnd(0,1400);}
-function play(){
-  clearTimeout(timer);if(!started||paused)return;
-  const s=pickScene();if(!s){timer=setTimeout(play,5000);return;}
-  const lines=s.l.slice();
-  if(Math.random()<.5&&lines.length>2){lines.splice(2+Math.floor(Math.random()*(lines.length-2)),0,FILL[Math.floor(Math.random()*FILL.length)]);}
-  let i=0;
-  (function step(){
-    if(paused||!started)return;
-    addMsg(pickP(),lines[i]);
-    if(i===0&&vibrate){try{navigator.vibrate&&navigator.vibrate(40);}catch(e){}}
-    i++;
-    if(i<lines.length){timer=setTimeout(step,delay(lines[i]));}
-    else{const [a,b]=PACES[pace];timer=setTimeout(play,rnd(a,b)*1000);}
-  })();
-}
+function play(){}   // sem roteiro: só a IA fala
 async function lock(){try{if(awake&&'wakeLock' in navigator)wl=await navigator.wakeLock.request('screen');}catch(e){}}
 function chip(parent,label,on,fn){const b=document.createElement('button');b.className='chip'+(on?' on':'');b.textContent=label;b.onclick=()=>fn(b);parent.appendChild(b);return b;}
-const pb=Object.keys(PACES).map(k=>({k,b:chip($('paceC'),{calmo:'😌 Calmo',normal:'💬 Normal',agitado:'⚡ Agitado'}[k],k===pace,()=>{pace=k;pb.forEach(x=>x.b.classList.toggle('on',x.k===k));})}));
+const pb=Object.keys(PACES).map(k=>({k,b:chip($('paceC'),{calmo:'😌 Calmo (a cada 14s)',normal:'💬 Normal (8s)',agitado:'⚡ Agitado (5s)'}[k],k===pace,()=>{pace=k;pb.forEach(x=>x.b.classList.toggle('on',x.k===k));})}));
 NAMES.forEach((n,i)=>chip($('pC'),n[0].split('_')[0],true,b=>{if(enabled.has(i)){if(enabled.size===1)return;enabled.delete(i);b.classList.add('off');b.classList.remove('on');}else{enabled.add(i);b.classList.remove('off');b.classList.add('on');}}));
-CATS.forEach(([id,l])=>chip($('cC'),l,true,b=>{if(catOn.has(id)){if(catOn.size===1)return;catOn.delete(id);b.classList.add('off');b.classList.remove('on');}else{catOn.add(id);b.classList.remove('off');b.classList.add('on');}}));
 chip($('oC'),'📳 Vibrar',true,b=>{vibrate=!vibrate;b.classList.toggle('on',vibrate);b.classList.toggle('off',!vibrate);});
 chip($('oC'),'🔆 Tela ligada',true,b=>{awake=!awake;b.classList.toggle('on',awake);b.classList.toggle('off',!awake);awake?lock():(wl&&wl.release&&wl.release());});
-chip($('oC'),'🔄 Zerar repertório',false,()=>{used.clear();save();});
 
 // ===== IA: ouve sua voz e responde como chat =====
 const AIKEY='chatpriv_ai_v1';
@@ -188,7 +95,7 @@ Responda APENAS um array JSON, de 3 a 6 itens: [{"u":"Nome_Do_Usuario","t":"mens
 let q=[],pumping=false,lastShow=0,lastGap=0,firstOfBatch=true,interimTxt='',skipChars=0,dT=null;
 function extract(buf,from){const out=[],re=/\{[^{}]*\}/g;re.lastIndex=from;let m,last=from;
   while((m=re.exec(buf))){try{const o=JSON.parse(m[0]);if(o&&o.t)out.push(o);last=re.lastIndex;}catch(e){}}return [out,last];}
-function schedScript(){clearTimeout(timer);const [a,b]=PACES[pace];timer=setTimeout(play,rnd(a,b)*1000+20000);}   // roteiro só volta se você ficar calado
+function schedScript(){}   // roteiro só volta se você ficar calado
 function enqueue(m){q.push(m);pump();}
 function pump(){
   if(pumping||!q.length)return;pumping=true;
@@ -253,7 +160,7 @@ async function aiTurn(){
     }
     if(!n)throw new Error('resposta vazia');
     aiMsg('IA ligada · ouvindo');$('st').textContent='🎤 ouvindo';
-  }catch(e){aiMsg('Erro da IA ('+e.message+'). Usando o roteiro.');$('st').textContent='⚠ IA falhou: '+e.message;schedScript();}
+  }catch(e){aiMsg('Erro da IA ('+e.message+'). Tente de novo na próxima fala.');$('st').textContent='⚠ IA falhou: '+e.message;schedScript();}
   busy=false;
 }
 function startMic(){
@@ -276,7 +183,7 @@ function setAi(on){
   if(on&&!ai.key){aiMsg('Cole a chave da API primeiro.');return false;}
   ai.on=on;
   if(on){if(!startMic()){ai.on=false;return false;}if(location.protocol==='https:'||location.hostname==='localhost')aiMsg('IA ligada · ouvindo');}
-  else{recOn=false;try{rec&&rec.stop();}catch(e){}aiMsg('IA desligada: usando só o roteiro.');}
+  else{recOn=false;try{rec&&rec.stop();}catch(e){}aiMsg('IA desligada.');}
   return ai.on;
 }
 let aiBtn=null;
@@ -290,9 +197,13 @@ function bindAi(){
   aiBtn=chip($('aiC'),'🤖 Ligar IA',false,b=>{const on=setAi(!ai.on);b.classList.toggle('on',on);b.textContent=on?'🤖 IA ligada':'🤖 Ligar IA';});
 }
 bindAi();
-$('go').onclick=()=>{started=true;$('start').style.display='none';lock();play();};
-$('skip').onclick=()=>{clearTimeout(timer);play();};
-$('pp').onclick=()=>{paused=!paused;$('pp').textContent=paused?'▶':'⏸';paused?clearTimeout(timer):play();};
+$('go').onclick=()=>{
+  if(!ai.key){$('start').style.display='none';$('sheet').hidden=false;aiMsg('Cole a chave da API, ligue a IA e toque em Fechar.');started=true;return;}
+  started=true;$('start').style.display='none';lock();
+  if(!ai.on&&setAi(true)&&aiBtn){aiBtn.classList.add('on');aiBtn.textContent='🤖 IA ligada';}
+};
+$('skip').onclick=()=>{$('feed').innerHTML='';recent.length=0;};
+$('pp').onclick=()=>{paused=!paused;$('pp').textContent=paused?'▶':'⏸';if(!paused)pump();};
 $('gear').onclick=()=>{$('sheet').hidden=false;};
 $('close').onclick=()=>{$('sheet').hidden=true;};
 document.addEventListener('visibilitychange',()=>{if(started&&document.visibilityState==='visible')lock();});

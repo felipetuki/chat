@@ -11,6 +11,11 @@ html,body{height:100%;background:#0e0e12;color:#f2f2f5;font-family:system-ui,-ap
 .m{font-size:clamp(22px,6.2vw,34px);line-height:1.25;margin-top:12px;animation:in .25s ease-out;word-break:break-word}
 .m b{color:var(--c);font-weight:700;margin-right:8px}
 .m.old{opacity:.55}.m.older{opacity:.3}
+.tip{margin-top:14px;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#3a2a00,#4a3300);border:2px solid #ffc83d;box-shadow:0 0 24px #ffc83d44;animation:in .25s ease-out}
+.tip small{display:block;color:#ffc83d;font-weight:700;font-size:13px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px}
+.tip span{display:block;font-size:clamp(24px,6.8vw,38px);line-height:1.22;font-weight:600;color:#fff6dc}
+.tip.old{opacity:.8}.tip.older{opacity:.45}
+details{margin-top:10px}summary{color:#8d8d99;font-size:14px;margin-bottom:8px}
 @keyframes in{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
 #start{position:fixed;inset:0;background:#0e0e12;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;z-index:5}
 #start button,.chip{background:#7c5cff;color:#fff;border:0;border-radius:14px;padding:14px 26px;font-size:18px}
@@ -26,10 +31,13 @@ html,body{height:100%;background:#0e0e12;color:#f2f2f5;font-family:system-ui,-ap
 </style></head><body>
 <div id="top"><span id="st">chat privado · só você vê</span><span><button id="skip">🧹</button><button id="pp">⏸</button><button id="gear">⚙</button></span></div>
 <div id="feed"></div>
-<div id="start"><h1>💬 Chat privado</h1><p>Chat de companhia que só você vê. Ele ouve o que você fala e reage em mensagens curtas, como um chat de verdade. Precisa da chave da API (Ajustes).</p><button id="go">Começar</button></div>
+<div id="start"><h1>💬 Chat privado</h1><p>Chat de companhia que só você vê. Ele ouve o que você fala e reage em mensagens curtas, como um chat de verdade. Tópicos destacados pra você falar aparecem entre as mensagens. Pra ligar o chat com IA, cole a chave da API em Ajustes.</p><button id="go">Começar</button></div>
 <div id="sheet" hidden>
 <h2>Frequência das respostas</h2><div class="chips" id="paceC"></div>
 <h2>Personagens</h2><div class="chips" id="pC"></div>
+<h2>Tópicos pra você falar</h2><div class="chips" id="tpC"></div>
+<h2>Um tópico a cada</h2><div class="chips" id="tpI"></div>
+<details><summary>Escolher categorias (50)</summary><div class="chips" id="tpCat"></div></details>
 <h2>IA (reage ao que você fala)</h2>
 <div class="chips" id="aiC"></div>
 <div class="chips" id="provC"></div>
@@ -85,7 +93,7 @@ let retryT=null;
 const ASKTXT={
   poucas:'PERGUNTA: só ~8% das mensagens, curtas e práticas ("tá no ps5 normal?", "vai jogar até que horas?", "qual o nome do jacaré?"), nunca filosóficas.',
   normal:'PERGUNTA: em toda resposta inclua 1 pergunta curta direcionada ao streamer, CONTEXTUALIZADA no que ele acabou de dizer ou fazer (ex.: "por que escolheu esse carro?", "e agora vai fazer o quê?", "já tinha jogado o anterior?"). As outras mensagens continuam comentários normais. Nada de pergunta genérica ou filosófica.',
-  muitas:'PERGUNTA: em toda resposta inclua de 1 a 2 perguntas curtas direcionadas ao streamer, bem específicas ao que ele acabou de dizer ou fazer, para ele continuar falando; pode ter um usuário insistindo ("responde aí"). Nada de pergunta genérica ou filosófica.'};
+  muitas:'PERGUNTA: em toda resposta inclua de 1 a 2 perguntas curtas direcionadas ao streamer, bem específicas ao que ele acabou de dizer ou fazer, para ele continuar falando; sem insistir nem cobrar resposta. Nada de pergunta genérica ou filosófica.'};
 function sysPrompt(){
   const names=[...enabled].map(i=>NAMES[i][0]).join(', ');
   return `Você simula o chat de uma live da Twitch brasileira, em pt-BR, que SÓ o streamer vê (é um chat de companhia declarado, não finge ser audiência real). As mensagens devem parecer pessoas reais digitando rápido. Medido em ~76 mil mensagens de chats reais:
@@ -93,12 +101,13 @@ TAMANHO: 27% das mensagens têm 1 palavra, 55% até 3 palavras, 35% de 4 a 8, s�
 ESCRITA: minúsculas, sem ponto final (só 6% terminam em pontuação), gírias (mds, pqp, mano, cara, vc, q, pq, tmj, eita, oloko, slk, crl, f, lol, boa, nice), sem acento às vezes.
 RISADA: quando há motivo, ela vem em tamanhos variados ("kkk", "kkkkkkkkkkkk", "KKKKKKKKKK"), muitas vezes colada ao assunto ("kkkkk o jacaré", "kkkk q isso"). Em chats reais ~18% das mensagens são risada, mas SÓ em reação a algo engraçado, estranho ou errado que acabou de acontecer.
 GRITO: ~9% em CAIXA ALTA, quando algo surpreende ou engraça ("O JACARÉ", "NAO É POSSIVEL", "KKKKKKK SE FUDEU").
-SUGESTÃO: ~7% são ordens/sugestões ao streamer, no imperativo ("faz uma bolsa", "leva pra casa", "joga ele na água", "pega", "olha", "vende", "usa a picape").
+SUGESTÃO: ~7% são sugestões leves e divertidas sobre o que está acontecendo no jogo ou na conversa ("leva pra casa", "testa com a picape", "pega esse aí"), nunca cobrando ele.
 RESPOSTA: ~7% respondem outro espectador com @ ("@Dex_Zoeira verdade kkkk") ou continuam a piada dele.
 ${ASKTXT[ai.ask]||ASKTXT.poucas}
 CONTEÚDO: o chat comenta o que o streamer ACABOU de dizer ou fazer, usando as palavras concretas dele (objeto, personagem, lugar, comida, jogo). Concorde, tire sarro, brinque com o erro dele, lembre algo de outro jogo, repita a piada de outro espectador, faça um trocadilho. Também aparecem: "lol", "F" quando algo dá errado, "gg", "boa" quando acerta, e de vez em quando brincadeira com o próprio chat parado ("chat tá mudo hoje").
 RITMO: respostas de 2 a 6 mensagens; quando algo é engraçado, rajada de risadas de usuários diferentes; quando é calmo, 2 ou 3 mensagens soltas.
 CONTEXTO OBRIGATÓRIO: toda mensagem precisa ter motivo no que o streamer acabou de dizer ou fazer. NUNCA mande risada, \"f\", \"eita\", \"boa\" ou qualquer reação de enchimento se o que ele disse foi banal. Se a fala não rende reação, comente o conteúdo dela de forma específica, faça uma pergunta específica, ou responda com um array vazio []. Cada mensagem tem que dar pra ligar a algo concreto dito por ele.
+TOM: amistoso, acolhedor e bem-humorado, como um chat que gosta do streamer. NUNCA agressivo, impaciente ou cobrando: proibido \"fala logo\", \"responde aí\", \"anda\", \"tá demorando\", \"cala a boca\", xingar, humilhar ou reclamar de silêncio, de demora ou do conteúdo. Zoeira só carinhosa, nunca sobre o streamer pessoalmente. Se ele demorar pra falar ou responder, o chat espera com calma ou muda de assunto de leve. Palavrão pesado não.
 PROIBIDO: frase de efeito, constatação filosófica, texto longo, ponto final, repetir algo já dito no chat recente, explicar a piada.
 Usuários disponíveis: ${names}.
 Contexto da live: ${ai.ctx||'(não informado)'}.
@@ -163,7 +172,7 @@ async function aiTurn(forceAsk){
   clearTimeout(timer);firstOfBatch=true;aiMsg('IA pensando…');$('st').textContent='💭 pensando…';
   try{
     const user='Chat recente:\n'+(recent.slice(-10).join('\n')||'(vazio)')+(forceAsk===true
-      ?'\n\nO streamer ficou calado há um tempo. O que ele falou por último: "'+(text||ai.ctx)+'". Mande 2 a 4 mensagens, e pelo menos UMA delas deve ser uma pergunta curta e específica a ele sobre isso, pra ele voltar a falar.'
+      ?'\n\nO streamer ficou calado há um tempo. O que ele falou por último: "'+(text||ai.ctx)+'". Mande 2 a 4 mensagens em tom leve e acolhedor, sem cobrar nem reclamar do silêncio (ele pode estar pensando ou jogando), e pelo menos UMA delas deve ser uma pergunta curta e específica sobre o que ele falou, só por curiosidade.'
       :'\n\nO streamer acabou de falar: "'+text.slice(-400)+'"');
     const model=ai.model||DEF[ai.prov];let n=0;
     if(ai.prov==='gemini')n=await geminiStream(model,user);
@@ -221,10 +230,598 @@ function bindAi(){
   $('ctx').oninput=()=>{ai.ctx=$('ctx').value.trim();saveAi();};
   aiBtn=chip($('aiC'),'🤖 Ligar IA',false,b=>{const on=setAi(!ai.on);b.classList.toggle('on',on);b.textContent=on?'🤖 IA ligada':'🤖 Ligar IA';});
 }
+
+// ===== Tópicos destacados pra você falar =====
+const TOPICS=[
+["🍽️","Comida do dia a dia",[
+"conta a refeição mais gostosa que você já comeu e onde foi",
+"fala de um prato simples que pra você vale mais que restaurante caro",
+"descreve a comida que te lembra a casa da sua família",
+"lembra de uma comida que você odiava e hoje ama",
+"fala do combo de comida que parece estranho mas é perfeito",
+"conta como seria seu almoço de domingo ideal",
+"imagina um prato que só você sabe fazer direito",
+"fala de uma comida que você comeria todo dia sem enjoar",
+"conta uma vez em que a comida deu muito errado",
+"descreve o melhor lanche que você já montou na geladeira"]],
+["🍔","Lanche e comida de rua",[
+"fala do pastel, coxinha ou espetinho que marcou sua vida",
+"conta de uma lanchonete ou barraquinha que você nunca esquece",
+"descreve o hambúrguer perfeito do seu jeito",
+"lembra de um lanche de madrugada que valeu a noite",
+"fala do que você pede quando quer matar a fome sem pensar",
+"conta qual comida de feira ou de rua você defende até o fim",
+"imagina abrir sua barraca: o que você vende?",
+"fala de uma combinação de lanche que as pessoas estranham",
+"conta de uma vez que você comeu algo na rua e se arrependeu ou amou",
+"descreve o cheiro de comida que te faz parar na rua"]],
+["🍰","Doces e sobremesas",[
+"fala da sobremesa que você nunca recusa",
+"conta qual doce da infância voltou à sua cabeça esses dias",
+"descreve o brigadeiro ou bolo que você acha perfeito",
+"imagina o sorvete de sabor mais maluco que você toparia provar",
+"fala do doce que sua avó ou sua mãe fazia",
+"conta de uma sobremesa que você exagerou e passou mal",
+"descreve a sobremesa dos sonhos pra Black Friday dos doces",
+"fala de um chocolate ou bala que sumiu e deixou saudade",
+"lembra de festa de aniversário e do bolo que mais marcou",
+"imagina inventar um doce novo: como ele seria?"]],
+["☕","Café e bebidas",[
+"conta como você toma seu café e se consegue viver sem ele",
+"fala da bebida que mais te lembra uma fase da vida",
+"descreve um refri ou suco da infância que você amava",
+"conta o melhor drink ou bebida gelada num dia de calor",
+"fala de uma bebida que parecia ruim e virou vício",
+"imagina uma cafeteria perfeita: o que tem lá dentro?",
+"lembra de uma bebida que te salvou numa madrugada",
+"conta de uma mistura de bebidas que só você aprova",
+"fala do copo, caneca ou garrafa que você não troca por nada",
+"descreve a bebida que combina com a vibe da live agora"]],
+["🥩","Churrasco e comida em família",[
+"descreve o churrasco ideal: carne, música e gente",
+"conta quem é o rei da churrasqueira na sua família",
+"fala da comida de Natal que nunca pode faltar",
+"lembra de um almoço de domingo cheio de gente e confusão",
+"conta aquela receita de família que ninguém acerta igual",
+"fala do acompanhamento que rouba a cena do churrasco",
+"imagina montar o cardápio de uma ceia perfeita",
+"conta uma história engraçada de mesa de família",
+"descreve o cheiro da casa quando alguém está cozinhando pra todo mundo",
+"fala de uma comida que só aparece em festa e deixa saudade"]],
+["🕹️","Jogos clássicos",[
+"conta o primeiro videogame que você teve ou jogou",
+"fala do jogo antigo que você ainda reinstalaria hoje",
+"lembra da trilha sonora de jogo que gruda na cabeça até hoje",
+"descreve a fase mais difícil que você já passou num clássico",
+"conta de uma tarde inteira jogando com amigos ou irmãos",
+"fala de um jogo que deveria ganhar remake ou continuação",
+"imagina o jogo da sua infância com gráficos de hoje",
+"lembra de um cheat ou segredo que você descobriu e mostrou pra todo mundo",
+"fala do Ocarina of Time e do que ele significa pra você ou pra quem jogou",
+"conta qual personagem de jogo antigo era seu herói de verdade"]],
+["🎮","Jogos do momento",[
+"fala do que você espera de GTA 6 ou do que já viu dele",
+"conta qual jogo está te prendendo mais ultimamente",
+"descreve o jogo que você jogaria agora se tivesse o dia livre",
+"fala de Call of Duty e de por que ele ainda domina a lista de vendas",
+"conta de um lançamento recente que te surpreendeu",
+"imagina o mundo aberto perfeito: como seria?",
+"fala do jogo que todo mundo comenta e você ainda não jogou",
+"conta qual jogo indie pequeno merecia ser famoso",
+"fala de um jogo que você comprou na promoção e nunca abriu",
+"descreve a primeira missão ou hora de um jogo que te fisgou"]],
+["🖥️","Setup e consoles",[
+"descreve seu setup ideal, sem limite de grana",
+"conta a história do seu primeiro PC ou console",
+"fala do periférico que mudou sua vida de jogador",
+"lembra de uma vez que seu equipamento quebrou na pior hora",
+"conta se você é time PlayStation, Xbox, Switch ou PC e por quê",
+"fala do preço de hardware e do que você sonha em comprar",
+"imagina o quarto gamer dos sonhos com todos os detalhes",
+"conta um problema de cabo, ventoinha ou barulho que te enlouqueceu",
+"fala do jogo que você jogaria só pra testar uma placa de vídeo nova",
+"descreve como era sua mesa quando você começou a jogar"]],
+["👻","Terror e suspense",[
+"conta o jogo ou filme de terror que mais te deu medo",
+"fala do susto mais ridículo que você já tomou",
+"descreve o tipo de monstro que mais te incomoda",
+"lembra de uma noite em que você não conseguiu dormir depois de ver algo",
+"imagina passar uma noite num lugar assombrado: o que você leva?",
+"conta uma história de arrepio que alguém te contou",
+"fala do que é pior: jumpscare ou tensão lenta",
+"conta de um barulho estranho em casa que te assustou",
+"descreve a trilha sonora que te dá calafrio",
+"fala do filme de terror que você recomendaria pra quem tem coragem"]],
+["📱","Jogos de celular e casuais",[
+"conta qual jogo de celular você já abandonou e voltou",
+"fala do joguinho que você joga sem perceber o tempo passar",
+"lembra de um jogo viciante de anos atrás que sumiu",
+"descreve quanto você já gastou, ou quase gastou, em jogo mobile",
+"conta qual jogo você joga na fila ou no ônibus",
+"fala de um jogo de tabuleiro ou cartas que reúne a galera",
+"imagina criar um joguinho simples: qual seria a ideia?",
+"conta de uma partida de jogo casual que virou rivalidade",
+"fala do jogo que te ensinou a ter paciência ou perdeu a sua",
+"descreve o jogo que combina com 5 minutos livres"]],
+["📺","Séries",[
+"fala da série que você não consegue parar de ver",
+"conta uma série que te surpreendeu depois do primeiro episódio",
+"descreve o final de série que te marcou, bom ou ruim",
+"fala de Black Doves, Valentina, Casadas e Caçadoras ou o que está em alta no streaming",
+"conta qual personagem de série você gostaria de ser amigo",
+"lembra de uma maratona de série que virou madrugada",
+"imagina uma série que você criaria: de que ela fala?",
+"fala de uma série antiga que merecia voltar",
+"conta qual série você indicaria pra quem está sem o que ver",
+"descreve o episódio que você revê quando quer se animar"]],
+["🎬","Filmes",[
+"conta o filme que você viu mais de cinco vezes",
+"fala de um filme que te fez chorar, mesmo sem querer",
+"descreve a cena de filme que você lembra até hoje",
+"lembra do primeiro filme que você viu no cinema",
+"fala de Premonição, Transformers ou Shrek e do que eles trazem de lembrança",
+"conta qual filme tem a melhor trilha sonora que você ouviu",
+"imagina um filme com você como protagonista: qual gênero?",
+"fala do filme que todo mundo ama e você acha exagero",
+"conta uma ida ao cinema que deu muito certo ou muito errado",
+"descreve o filme perfeito pra uma noite de chuva"]],
+["🍥","Animes e desenhos",[
+"conta o anime ou desenho que marcou sua infância",
+"fala do personagem de desenho que você queria ser",
+"descreve a abertura de desenho que você ainda sabe cantar",
+"lembra da programação de TV de manhã com desenhos",
+"conta qual anime você indicaria pra quem nunca viu",
+"fala de um desenho que você revê e percebe coisas novas",
+"imagina ter um poder de anime: qual seria?",
+"conta da fase em que você corria pra casa pra ver desenho",
+"fala do vilão de desenho que você achava mais legal",
+"descreve a cena de anime que te deixou sem palavras"]],
+["🎵","Música",[
+"conta a música que está na sua cabeça hoje",
+"fala da música que te faz voltar no tempo na hora",
+"descreve a playlist perfeita pra jogar à noite",
+"lembra de uma música que você amava e agora acha engraçada",
+"fala do sertanejo, funk, pagode ou rock que domina seus fones",
+"conta de um hit viral que você ouviu demais e não aguenta mais",
+"imagina montar a trilha sonora da sua vida: qual toca no começo?",
+"fala do artista que você descobriu tarde e ficou fã",
+"conta uma música que te lembra uma pessoa ou lugar",
+"descreve um som ou instrumento que te arrepia"]],
+["🎤","Shows e festivais",[
+"conta o melhor show ou evento ao vivo que você já foi",
+"fala do show dos sonhos que você pagaria qualquer preço",
+"descreve a sensação de cantar junto com milhares de pessoas",
+"lembra de uma vez que você perdeu um show ou ingresso",
+"conta uma confusão ou perrengue em evento lotado",
+"fala de um festival que você gostaria de conhecer",
+"imagina subir no palco: o que você tocaria ou cantaria?",
+"conta de um show pequeno e simples que foi inesquecível",
+"fala do que você levaria numa mochila pra um festival",
+"descreve o som que você queria ouvir ao vivo hoje"]],
+["🧸","Infância",[
+"conta a brincadeira que você mais amava quando era criança",
+"fala do brinquedo que você pediu e nunca ganhou",
+"lembra de um lugar da infância que ainda aparece nos seus sonhos",
+"descreve a rua onde você brincava e como ela era",
+"conta de um dia de verão ou férias que parecia infinito",
+"fala de um desenho, bala ou figurinha que fazia sucesso",
+"imagina voltar um dia pra infância: o que você faria?",
+"conta de uma travessura que você aprontou e ninguém descobriu",
+"fala do cheiro ou som que te transporta pra quando era pequeno",
+"descreve como era a casa dos seus avós"]],
+["🏫","Escola e faculdade",[
+"conta a matéria que você mais amava ou mais odiava",
+"fala do professor que ficou na sua memória pra sempre",
+"lembra de uma prova, trabalho ou apresentação que deu confusão",
+"descreve como era o intervalo da sua escola",
+"conta do amigo ou amiga de sala que fazia todo mundo rir",
+"fala da turma do fundo e do que acontecia lá",
+"imagina uma aula que você daria hoje: sobre o quê?",
+"conta de uma tarefa que você fez de última hora e deu certo",
+"fala de uma excursão, festa junina ou gincana inesquecível",
+"descreve o uniforme, a mochila ou o caderno que você tinha"]],
+["📼","Anos 2000 e nostalgia",[
+"fala de lan house, MSN, Orkut ou fotolog e do que você lembra",
+"conta o celular antigo que você tinha e adorava",
+"descreve a sensação de baixar música ou jogo com internet lenta",
+"lembra de um toque de celular ou som de conexão que marcou época",
+"fala do CD, DVD ou fita que você gravou e guardou",
+"conta qual era a moda da sua turma na adolescência",
+"imagina uma festa dos anos 2000: qual música não pode faltar?",
+"fala do primeiro e-mail ou apelido que você usou na internet",
+"conta de uma tecnologia antiga que você sente falta",
+"descreve a primeira vez que você usou computador"]],
+["😂","Memes e internet",[
+"conta o meme que te faz rir toda vez que lembra",
+"fala do brainrot, Tralalero ou da trend mais maluca que você viu",
+"descreve um vídeo viral que você assistiu várias vezes",
+"lembra de um meme antigo que ainda funciona",
+"conta qual figurinha de WhatsApp você mais usa",
+"fala de um áudio ou música viral que não saiu da sua cabeça",
+"imagina criar um meme: qual seria a ideia?",
+"conta de uma trend que você tentou fazer e deu errado",
+"fala do canal ou criador que você assiste sem vergonha nenhuma",
+"descreve a coisa mais aleatória que você viu na internet essa semana"]],
+["📲","Redes sociais e apps",[
+"conta qual rede social você mais usa sem perceber",
+"fala do app que você não vive sem",
+"descreve o tipo de vídeo que mais te prende no scroll",
+"lembra de uma vez que você ficou horas num app e nem viu",
+"conta do que você segue que ninguém imaginaria",
+"fala de um perfil, canal ou página que sempre te faz sorrir",
+"imagina um app novo que resolveria um problema seu",
+"conta de uma mensagem no grupo da família que virou história",
+"fala do que você faria sem celular por um dia inteiro",
+"descreve sua tela inicial e o que ela diz sobre você"]],
+["🤖","Tecnologia e IA",[
+"fala de como a IA mudou, ou não, o seu dia a dia",
+"conta uma coisa que você já pediu pra uma IA e achou engraçada",
+"descreve a tecnologia que você acha mais fascinante",
+"imagina daqui a 10 anos: como serão casas, carros e jogos?",
+"fala de um gadget que você comprou e hoje usa demais",
+"conta se você confiaria num robô pra cozinhar sua janta",
+"lembra de uma tecnologia que parecia futuro e hoje é normal",
+"fala do preço de peças e eletrônicos subindo e o que você acha",
+"conta o app de IA, foto ou vídeo que mais te surpreendeu",
+"descreve o assistente virtual que você gostaria de ter"]],
+["📞","Celular e gadgets",[
+"conta qual foi seu melhor celular e por que",
+"fala do que você mais faz no celular além de ligar",
+"descreve o fone, carregador ou capinha que você não larga",
+"lembra de quando você derrubou ou perdeu o celular",
+"conta de um gadget estranho que você queria ter",
+"fala da câmera do celular e das fotos que mais tem na galeria",
+"imagina um celular perfeito: o que ele teria de diferente?",
+"conta do que tem na sua galeria que dá vergonha mostrar",
+"fala de um relógio, fone ou acessório que mudou sua rotina",
+"descreve como você organiza, ou desorganiza, seus apps"]],
+["✈️","Viagens",[
+"conta a melhor viagem que você já fez",
+"fala do lugar do mundo que você quer conhecer primeiro",
+"descreve o perrengue de viagem que virou piada depois",
+"lembra de uma estrada, voo ou ônibus que marcou",
+"conta o que você levaria numa mala de uma semana",
+"fala de uma cidade pequena que te encantou",
+"imagina viajar sem plano algum: pra onde você iria?",
+"conta de uma comida que você só provou viajando",
+"fala do hotel, pousada ou casa onde você ficou e nunca esqueceu",
+"descreve a vista mais bonita que você já viu"]],
+["🏙️","Sua cidade e seus lugares",[
+"fala do que você mais gosta na sua cidade",
+"conta de um lugar escondido que só quem mora ali conhece",
+"descreve o caminho que você mais faz no dia a dia",
+"lembra de um bairro ou rua que mudou muito com o tempo",
+"conta o melhor lugar pra sentar e ficar sem fazer nada",
+"fala do clima da sua cidade e de como ele afeta seu humor",
+"imagina ser guia turístico da sua cidade por um dia",
+"conta do restaurante, praça ou mercado que você mais frequenta",
+"fala do transporte que você usa e das histórias nele",
+"descreve o som típico de onde você mora"]],
+["🏖️","Praia, campo e natureza",[
+"conta seu dia de praia ou cachoeira perfeito",
+"fala da paisagem natural que mais te acalma",
+"descreve uma trilha, acampamento ou viagem no mato que você fez",
+"lembra de um pôr do sol que parou o que você estava fazendo",
+"conta da chuva forte que te pegou de surpresa",
+"fala do cheiro de terra molhada ou de mar que você ama",
+"imagina uma casa no meio da natureza: como seria?",
+"conta de uma vez que você se perdeu num lugar bonito",
+"fala do bicho que você viu de perto e nunca esqueceu",
+"descreve o som da natureza que você mais gosta"]],
+["🐶","Animais de estimação",[
+"conta a história do seu pet, atual ou antigo",
+"fala da mania mais engraçada de um bicho que você conhece",
+"descreve o pet dos seus sonhos, mesmo que seja impossível",
+"lembra de um animal que apareceu na sua vida do nada",
+"conta uma travessura de cachorro ou gato que virou lenda",
+"fala do nome mais criativo que você já deu ou ouviu pra um pet",
+"imagina conversar com seu animal por um minuto: o que ele diria?",
+"conta de um bicho de rua que você adotou ou quis adotar",
+"fala de um jacaré, sapo ou bicho diferente que você achou legal",
+"descreve a cena mais fofa que seu pet já protagonizou"]],
+["🦒","Curiosidades da natureza",[
+"conta o bicho mais estranho ou impressionante que você conhece",
+"fala de um animal que você teria medo de encontrar",
+"descreve uma curiosidade do oceano que te fascina",
+"lembra de um documentário que te fez ver a natureza diferente",
+"conta qual animal tem o superpoder mais invejável",
+"fala de uma planta ou árvore que você acha incrível",
+"imagina uma criatura nova que viveria na floresta",
+"conta de um inseto que te dá nojo ou fascínio",
+"fala do clima extremo mais louco que você já viveu",
+"descreve o ecossistema que você gostaria de explorar"]],
+["💼","Trabalho e carreira",[
+"conta o trabalho mais diferente que você já teve",
+"fala do que você faria se pudesse trabalhar com qualquer coisa",
+"descreve o melhor chefe ou colega que você já teve",
+"lembra do primeiro dia num emprego novo",
+"conta uma situação engraçada no trabalho que ninguém esqueceu",
+"fala do que você aprendeu de mais valioso trabalhando",
+"imagina um dia de trabalho perfeito do início ao fim",
+"conta da profissão que você sonhava ter quando criança",
+"fala do que mais te cansa e do que mais te anima numa rotina",
+"descreve como seria seu escritório ou ambiente ideal"]],
+["🛍️","Dinheiro, compras e Black Friday",[
+"conta a melhor compra que você já fez e valeu cada centavo",
+"fala do que você está de olho pra comprar na Black Friday",
+"descreve a promoção ou oferta que você nunca esquece",
+"lembra de uma compra por impulso que deu certo ou errado",
+"conta o que você faria com um prêmio inesperado",
+"fala de um hábito de compra que você tem e acha engraçado",
+"imagina uma lista de desejos sem limite: o que está nela?",
+"conta de um presente que você deu e fez sucesso",
+"fala de uma loja, site ou lugar onde você perde horas",
+"descreve como você escolhe o que vale a pena comprar"]],
+["⏰","Rotina e manhãs",[
+"descreve como é a sua manhã perfeita",
+"conta a primeira coisa que você faz quando acorda",
+"fala do ritual que te faz começar bem o dia",
+"lembra de uma manhã atrapalhada em que tudo deu errado",
+"conta como você se organiza, ou se desorganiza, durante a semana",
+"fala do horário do dia em que você rende mais",
+"imagina uma rotina ideal, com tudo no lugar",
+"conta de um hábito pequeno que melhorou muito sua vida",
+"fala do que te tira do sério em dias corridos",
+"descreve o fim de dia que você mais gosta"]],
+["🏠","Casa e decoração",[
+"descreve como seria a casa dos seus sonhos",
+"conta qual é o seu cantinho favorito em casa",
+"fala de um móvel ou objeto que você ama e não troca",
+"lembra de uma vez que você mudou o quarto todo de lugar",
+"conta de uma reforma, conserto ou bagunça que virou história",
+"fala das plantas, quadros ou luzes que deixam tudo mais aconchegante",
+"imagina uma sala só pra jogar, ver filme e relaxar",
+"conta o que você guarda na gaveta da bagunça",
+"fala do cheiro que lembra sua casa",
+"descreve o que você faria na sua casa num dia de chuva"]],
+["👕","Moda e estilo",[
+"conta a peça de roupa que você usa até gastar",
+"fala do tênis, boné ou acessório que é sua marca",
+"descreve o look que te deixa mais confiante",
+"lembra de uma moda antiga que você usava e hoje acha engraçada",
+"conta de uma roupa que você comprou e nunca usou",
+"fala do que você vestiria num dia sem regras",
+"imagina um guarda-roupa que só tem uma cor: qual seria?",
+"conta de um cabelo, barba ou corte que marcou uma fase",
+"fala de uma camiseta de banda, jogo ou time que você ama",
+"descreve a roupa mais confortável que existe pra você"]],
+["⚽","Futebol e torcida",[
+"conta como você virou torcedor do seu time",
+"fala do jogo que você assistiu e nunca vai esquecer",
+"descreve a sensação de gol no último minuto",
+"lembra do estádio, bar ou sala onde você assistia aos jogos",
+"conta do craque que mais te fez sonhar",
+"fala de uma rivalidade ou zoeira de torcida engraçada",
+"imagina montar o seu time dos sonhos com qualquer jogador",
+"conta de um jogo de videogame de futebol que virou campeonato",
+"fala do que mudou no futebol desde que você era criança",
+"descreve a camisa de time mais bonita que você já viu"]],
+["🏃","Esportes e movimento",[
+"conta o esporte que você mais gosta de praticar ou assistir",
+"fala de uma atividade física que você tentou e se surpreendeu",
+"descreve um dia de esporte que foi mais divertido que o esperado",
+"lembra de uma lesão ou tombo engraçado que você teve",
+"conta do esporte que você gostaria de aprender",
+"fala de um atleta que te inspira de verdade",
+"imagina competir em algo: qual seria sua modalidade?",
+"conta de uma pelada, corrida ou partida com amigos",
+"fala da música que te dá energia pra se mexer",
+"descreve a sensação de terminar um treino ou jogo cansativo"]],
+["😴","Sono e sonhos",[
+"conta o sonho mais estranho que você já teve",
+"fala do pesadelo que te acordou assustado",
+"descreve o seu jeito perfeito de dormir",
+"lembra de uma noite em que o sono não vinha de jeito nenhum",
+"conta se você é de acordar cedo ou de varar a madrugada",
+"fala de uma soneca que salvou o dia",
+"imagina ter o poder de controlar seus sonhos",
+"conta de um sonho que parecia real demais",
+"fala do que você faz quando não consegue dormir",
+"descreve o quarto ideal pra dormir bem"]],
+["🤝","Amizades",[
+"conta como você conheceu seu melhor amigo",
+"fala da amizade mais improvável que você tem",
+"descreve o rolê perfeito com os amigos",
+"lembra de um perrengue em grupo que virou piada eterna",
+"conta de um amigo que sempre dá a melhor ideia ruim",
+"fala da pessoa que você mais liga ou chama pra conversar",
+"imagina uma viagem só com os amigos: qual o destino?",
+"conta de um apelido que seus amigos te deram",
+"fala do que você mais valoriza em uma amizade",
+"descreve a conversa mais longa que você já teve com um amigo"]],
+["👨‍👩‍👧","Família",[
+"conta uma história engraçada da sua família",
+"fala de uma tradição de família que você adora",
+"descreve a pessoa mais animada da sua família",
+"lembra de um conselho de avó, avô, pai ou mãe que você nunca esqueceu",
+"conta de uma viagem em família cheia de confusão",
+"fala do hábito de um parente que todo mundo conhece",
+"imagina reunir toda a família num lugar: onde seria?",
+"conta de uma foto antiga de família que te faz rir",
+"fala da comida ou música que une todo mundo",
+"descreve como é o grupo de WhatsApp da sua família"]],
+["💘","Crushes e encontros",[
+"conta a situação mais embaraçosa que você viveu com um crush",
+"fala do encontro ideal, sem pressão e sem regras",
+"descreve a música que você dedicaria a alguém",
+"lembra de um romance de filme ou série que te marcou",
+"conta de uma mensagem que você escreveu e apagou várias vezes",
+"fala do tipo de piada que ganha o coração de qualquer um",
+"imagina um primeiro encontro numa cidade que você nunca foi",
+"conta de um presente romântico bobo e fofo",
+"fala do que você acha mais charmoso em alguém",
+"descreve uma história de amor que você acha bonita"]],
+["🙈","Vergonhas e micos",[
+"conta o mico mais memorável que você já pagou",
+"fala de uma vez que você errou o nome de alguém",
+"descreve a risada em hora errada que te perseguiu",
+"lembra de um tombo ou queda em público",
+"conta de uma mensagem enviada pra pessoa errada",
+"fala de um momento em que você queria sumir do mapa",
+"imagina rever o seu mico preferido: você riria ou se encolheria?",
+"conta uma gafe que virou lenda entre amigos",
+"fala de uma vez que você fingiu saber algo e se enrolou",
+"descreve o episódio que você só conta depois de anos"]],
+["🍀","Sorte e coincidências",[
+"conta a maior coincidência que já aconteceu com você",
+"fala de uma vez que você teve muita sorte",
+"descreve um encontro inesperado que mudou seu dia",
+"lembra de uma superstição ou mania de sorte que você tem",
+"conta de uma vez em que você achou algo que tinha perdido",
+"fala de um dia em que tudo deu certo sem planejar",
+"imagina ganhar um prêmio hoje: qual seria o primeiro passo?",
+"conta de uma coincidência de nomes, datas ou lugares",
+"fala do número ou objeto que você considera da sorte",
+"descreve a história de algo que quase deu errado e deu certo"]],
+["🤔","E se... hipóteses",[
+"imagina que você acorda com um dia extra na semana: o que faz?",
+"fala do que você faria se pudesse viver 24 horas em qualquer jogo",
+"conta como seria um mundo onde todo mundo fala a verdade",
+"descreve o que você faria sem precisar dormir por uma semana",
+"imagina ter um dia sem internet e sem celular",
+"fala de como seria viver num filme ou série à sua escolha",
+"conta o que você mudaria se fosse prefeito de um parque de diversões",
+"imagina trocar de vida com alguém por um dia: quem seria?",
+"fala de como seria o mundo se os animais conversassem",
+"descreve o que você faria numa ilha deserta com um único objeto"]],
+["🦸","Superpoderes e fantasia",[
+"conta o superpoder que você escolheria e por quê",
+"fala do vilão que você consideraria um bom parceiro",
+"descreve o seu mundo de fantasia ideal",
+"imagina ser um personagem de RPG: qual classe você seria?",
+"conta que criatura mágica você teria como companheira",
+"fala de um herói de filme ou jogo que te inspira",
+"imagina ter uma super-habilidade inútil mas divertida",
+"conta qual arma ou item mágico você carregaria",
+"fala de uma cidade fictícia que você gostaria de visitar",
+"descreve o seu nome e título de personagem épico"]],
+["🚀","Espaço e ciência",[
+"fala do que mais te impressiona no universo",
+"conta o que você faria se pudesse ir ao espaço amanhã",
+"descreve como imagina a vida em outro planeta",
+"lembra de uma curiosidade científica que te surpreendeu",
+"conta de um experimento ou feira de ciências que você viu ou fez",
+"fala do que você gostaria que a ciência descobrisse logo",
+"imagina viver numa estação espacial por um ano",
+"conta de uma noite em que você olhou pro céu estrelado",
+"fala de um planeta, estrela ou fenômeno que você acha lindo",
+"descreve como seria um dia na Lua"]],
+["🕵️","Mistérios e teorias",[
+"conta a teoria mais maluca que você já ouviu sobre um jogo ou série",
+"fala de um mistério que você gostaria de resolver",
+"descreve um caso curioso ou lenda urbana que você adora",
+"lembra de um episódio de detetive ou investigação que te prendeu",
+"conta de uma teoria de fã que seria incrível se fosse real",
+"fala de uma pista escondida em jogo ou filme que você percebeu",
+"imagina ser detetive de um caso bem bobo: qual?",
+"conta de uma situação inexplicável que aconteceu com você",
+"fala de uma teoria sobre o final de GTA 6 ou outro jogo famoso",
+"descreve o mistério da sua rua, casa ou escola"]],
+["🌙","Medos e assombrações",[
+"conta o medo mais bobo que você tem",
+"fala de uma casa ou lugar que dava arrepio",
+"descreve um barulho de madrugada que te deixou em alerta",
+"lembra de uma história de assombração da sua cidade ou família",
+"conta de uma vez que o escuro te assustou de verdade",
+"fala do que você faz pra vencer um medo",
+"imagina entrar numa casa abandonada: você entra ou foge?",
+"conta de um bicho ou inseto que te dá pavor",
+"fala de um conto de terror curto que ficou na memória",
+"descreve a sensação de arrepio sem motivo"]],
+["🎨","Hobbies e coleções",[
+"conta um hobby que você tem e quase ninguém sabe",
+"fala de algo que você coleciona, ou gostaria de colecionar",
+"descreve o projeto manual ou criativo que você mais curtiu fazer",
+"lembra de uma fase em que você fez algo diferente todo fim de semana",
+"conta de um instrumento, desenho ou habilidade que você quer aprender",
+"fala de uma atividade que te faz perder a noção do tempo",
+"imagina ter uma oficina ou ateliê: o que faria lá?",
+"conta de uma impressora 3D, kit ou ferramenta que te fascina",
+"fala de um passatempo antigo que você largou e sente falta",
+"descreve o seu cantinho de criar"]],
+["📚","Aprender e ler",[
+"conta o livro, HQ ou texto que mais te marcou",
+"fala de uma habilidade que você aprendeu sozinho",
+"descreve o tutorial ou curso que mudou algo em você",
+"lembra de uma vez que você aprendeu algo e quis contar pra todo mundo",
+"conta de um idioma que você gostaria de falar",
+"fala de uma curiosidade que você descobriu essa semana",
+"imagina ter um mentor em qualquer área: quem seria?",
+"conta do assunto que você pesquisa quando está sem sono",
+"fala de um erro que te ensinou muito",
+"descreve como você aprende melhor: vendo, ouvindo ou fazendo"]],
+["🎄","Fim de ano, Natal e festas",[
+"fala do que você mais espera do fim de ano",
+"conta como é a sua ceia ou o Natal na sua casa",
+"descreve a decoração de Natal que você mais gosta",
+"lembra de um Natal ou réveillon que marcou",
+"conta o presente mais legal que você já ganhou",
+"fala do plano que você quer cumprir antes do ano acabar",
+"imagina uma festa de fim de ano perfeita",
+"conta de uma tradição maluca que você ou sua família tem",
+"fala da trilha sonora de festa de fim de ano que não pode faltar",
+"descreve o que você pediria de presente se pudesse pedir qualquer coisa"]],
+["🎥","Sobre a live e o canal",[
+"fala do que você mais gosta de fazer na live",
+"conta um momento engraçado que já aconteceu aqui",
+"descreve como você imagina o canal daqui a um ano",
+"lembra da primeira live e de como ela foi",
+"conta o jogo ou assunto que você ainda quer trazer pra cá",
+"fala de uma coisa que você aprendeu fazendo live",
+"imagina uma live especial: qual seria o tema?",
+"conta da melhor reação ou comentário que você já recebeu",
+"fala do que te anima a ligar a câmera todo dia",
+"descreve o que você gostaria que o chat sentisse ao entrar aqui"]],
+["🎲","Papo aleatório",[
+"conta a coisa mais aleatória que você pensou hoje",
+"fala de uma mania pequena sua que ninguém entende",
+"descreve o seu objeto favorito e a história dele",
+"imagina resumir o seu dia numa palavra só e explica por quê",
+"conta uma opinião sua que quase ninguém compartilha",
+"fala da melhor surpresa pequena que você teve esta semana",
+"descreve um lugar, cheiro ou som que te deixa feliz sem motivo",
+"conta o que você faria com uma hora livre agora mesmo",
+"fala de um desafio bobo que você toparia fazer ao vivo",
+"imagina um dia perfeito, do café da manhã até dormir"]]
+];
+const TPKEY='chatpriv_tp_v1';
+let tpOn=true,tpInt=15,tpUsed=new Set(),tpCats=new Set(TOPICS.map((_,i)=>i)),tpLastCat=-1,lastTopic=0;
+try{tpUsed=new Set(JSON.parse(localStorage.getItem(TPKEY)||'[]'));}catch(e){}
+const tpSave=()=>{try{localStorage.setItem(TPKEY,JSON.stringify([...tpUsed]));}catch(e){}};
+function pickTopic(){
+  const all=[];TOPICS.forEach((c,ci)=>{if(tpCats.has(ci))c[2].forEach((_,ti)=>all.push(ci*10+ti));});
+  if(!all.length)return null;
+  let pool=all.filter(id=>!tpUsed.has(id));
+  if(!pool.length){all.forEach(id=>tpUsed.delete(id));pool=all;}
+  const other=pool.filter(id=>Math.floor(id/10)!==tpLastCat);   // nunca duas da mesma categoria seguidas
+  const src=other.length?other:pool,id=src[Math.floor(Math.random()*src.length)];
+  tpUsed.add(id);tpLastCat=Math.floor(id/10);tpSave();return id;
+}
+function showTopic(){
+  const id=pickTopic();if(id===null)return;
+  const c=TOPICS[Math.floor(id/10)],text=c[2][id%10];
+  const f=$('feed'),d=document.createElement('div');d.className='tip';
+  const sm=document.createElement('small');sm.textContent='💡 tópico · '+c[0]+' '+c[1];
+  const sp=document.createElement('span');sp.textContent=text;
+  d.appendChild(sm);d.appendChild(sp);f.appendChild(d);
+  const all=[...f.children];while(all.length>7)f.removeChild(all.shift());
+  const n=f.children.length;[...f.children].forEach((x,i)=>{x.classList.toggle('old',i===n-3);x.classList.toggle('older',i<n-3);});
+  recent.push('[tópico sugerido ao streamer] '+text);if(recent.length>30)recent.shift();
+  lastTopic=Date.now();
+  if(vibrate){try{navigator.vibrate&&navigator.vibrate([30,40,30]);}catch(e){}}
+}
+setInterval(()=>{if(started&&!paused&&tpOn&&Date.now()-lastTopic>=tpInt*1000)showTopic();},500);
+function bindTopics(){
+  const on=chip($('tpC'),'💡 Tópicos ligados',true,b=>{tpOn=!tpOn;b.classList.toggle('on',tpOn);b.classList.toggle('off',!tpOn);b.textContent=tpOn?'💡 Tópicos ligados':'💡 Tópicos desligados';if(tpOn)lastTopic=Date.now();});
+  const ib=[10,15,20,30,45,60,90].map(s=>({s,b:chip($('tpI'),s+' s',s===tpInt,()=>{tpInt=s;ib.forEach(x=>x.b.classList.toggle('on',x.s===s));})}));
+  chip($('tpC'),'🔄 Zerar usados',false,()=>{tpUsed.clear();tpSave();});
+  TOPICS.forEach((c,ci)=>chip($('tpCat'),c[0]+' '+c[1],true,b=>{if(tpCats.has(ci)){if(tpCats.size===1)return;tpCats.delete(ci);b.classList.add('off');b.classList.remove('on');}else{tpCats.add(ci);b.classList.remove('off');b.classList.add('on');}}));
+}
+bindTopics();
 bindAi();
 $('go').onclick=()=>{
-  if(!ai.key){$('start').style.display='none';$('sheet').hidden=false;aiMsg('Cole a chave da API, ligue a IA e toque em Fechar.');started=true;return;}
-  started=true;$('start').style.display='none';lock();
+  started=true;$('start').style.display='none';lock();lastTopic=Date.now()-tpInt*1000+2500;   // primeiro tópico em ~2,5 s
+  if(!ai.key){aiMsg('Sem chave: só os tópicos aparecem. Cole a chave da API pra ligar o chat com IA.');return;}
   if(!ai.on&&setAi(true)&&aiBtn){aiBtn.classList.add('on');aiBtn.textContent='🤖 IA ligada';}
 };
 $('skip').onclick=()=>{$('feed').innerHTML='';recent.length=0;};

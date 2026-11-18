@@ -65,7 +65,7 @@ function delay(t){return Math.max(1100,Math.min(5500,500+t.length*95))+rnd(0,140
 function play(){}   // sem roteiro: só a IA fala
 async function lock(){try{if(awake&&'wakeLock' in navigator)wl=await navigator.wakeLock.request('screen');}catch(e){}}
 function chip(parent,label,on,fn){const b=document.createElement('button');b.className='chip'+(on?' on':'');b.textContent=label;b.onclick=()=>fn(b);parent.appendChild(b);return b;}
-const pb=Object.keys(PACES).map(k=>({k,b:chip($('paceC'),{calmo:'😌 Calmo (a cada 14s)',normal:'💬 Normal (8s)',agitado:'⚡ Agitado (5s)'}[k],k===pace,()=>{pace=k;pb.forEach(x=>x.b.classList.toggle('on',x.k===k));})}));
+const pb=Object.keys(PACES).map(k=>({k,b:chip($('paceC'),{calmo:'😌 Calmo (a cada 10s)',normal:'💬 Normal (6s)',agitado:'⚡ Agitado (4s)'}[k],k===pace,()=>{pace=k;pb.forEach(x=>x.b.classList.toggle('on',x.k===k));})}));
 NAMES.forEach((n,i)=>chip($('pC'),n[0].split('_')[0],true,b=>{if(enabled.has(i)){if(enabled.size===1)return;enabled.delete(i);b.classList.add('off');b.classList.remove('on');}else{enabled.add(i);b.classList.remove('off');b.classList.add('on');}}));
 chip($('oC'),'📳 Vibrar',true,b=>{vibrate=!vibrate;b.classList.toggle('on',vibrate);b.classList.toggle('off',!vibrate);});
 chip($('oC'),'🔆 Tela ligada',true,b=>{awake=!awake;b.classList.toggle('on',awake);b.classList.toggle('off',!awake);awake?lock():(wl&&wl.release&&wl.release());});
@@ -77,7 +77,8 @@ let ai={on:false,prov:'gemini',key:'',ctx:'',model:''},heard='',sent=0,busy=fals
 try{Object.assign(ai,JSON.parse(localStorage.getItem(AIKEY)||'{}'));ai.on=false;}catch(e){}
 const saveAi=()=>{try{localStorage.setItem(AIKEY,JSON.stringify({prov:ai.prov,key:ai.key,ctx:ai.ctx,model:ai.model}));}catch(e){}};
 const aiMsg=t=>{$('aiSt').textContent=t;};
-const GAP={calmo:14,normal:8,agitado:5};
+const GAP={calmo:10,normal:6,agitado:4};
+let sig=null,lastResultAt=Date.now();
 let retryT=null;
 function sysPrompt(){
   const names=[...enabled].map(i=>NAMES[i][0]).join(', ');
@@ -119,7 +120,7 @@ async function geminiStream(model,user){
   const url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':streamGenerateContent?alt=sse';
   let r,think=true;
   for(let t=0;t<3;t++){
-    r=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':ai.key},body:geminiBody(model,user,think)});
+    r=await fetch(url,{method:'POST',signal:sig,headers:{'content-type':'application/json','x-goog-api-key':ai.key},body:geminiBody(model,user,think)});
     if(r.ok)break;
     if(r.status===400&&think){think=false;continue;}                 // modelo não aceita o parâmetro de raciocínio: tenta sem
     if(r.status===503||r.status===500){await new Promise(x=>setTimeout(x,600));continue;}   // Gemini sobrecarregado: tenta de novo rápido
@@ -145,6 +146,7 @@ async function aiTurn(){
   const wait=GAP[pace]*1000-(Date.now()-lastCall);
   if(wait>0){clearTimeout(retryT);retryT=setTimeout(aiTurn,wait+50);return;}
   busy=true;lastCall=Date.now();sent=heard.length;skipChars=interimTxt.length;interimTxt='';
+  const ac=new AbortController();sig=ac.signal;const to=setTimeout(()=>ac.abort(),15000);   // pedido travado é cancelado em 15s
   clearTimeout(timer);firstOfBatch=true;aiMsg('IA pensando…');$('st').textContent='💭 pensando…';
   if(Math.random()<.6)enqueue({u:'',t:FILL[Math.floor(Math.random()*FILL.length)]});   // reação instantânea enquanto a IA pensa
   try{
@@ -152,7 +154,7 @@ async function aiTurn(){
     const model=ai.model||DEF[ai.prov];let n=0;
     if(ai.prov==='gemini')n=await geminiStream(model,user);
     else{
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':ai.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:sig,headers:{'content-type':'application/json','x-api-key':ai.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
         body:JSON.stringify({model,max_tokens:300,system:sysPrompt(),messages:[{role:'user',content:user}]})});
       if(!r.ok)throw new Error('HTTP '+r.status);
       const j=await r.json();const raw=(j.content&&j.content[0]&&j.content[0].text)||'';
@@ -161,7 +163,8 @@ async function aiTurn(){
     if(!n)throw new Error('resposta vazia');
     aiMsg('IA ligada · ouvindo');$('st').textContent='🎤 ouvindo';
   }catch(e){aiMsg('Erro da IA ('+e.message+'). Tente de novo na próxima fala.');$('st').textContent='⚠ IA falhou: '+e.message;schedScript();}
-  busy=false;
+  clearTimeout(to);busy=false;
+  if(heard.length-sent>=10)setTimeout(aiTurn,50);   // falou enquanto a IA respondia: manda já
 }
 function startMic(){
   const seguro=location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
@@ -173,12 +176,17 @@ function startMic(){
     let it='';
     for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i],t=r[0].transcript;
       if(r.isFinal){heard+=' '+(skipChars?t.slice(Math.min(skipChars,t.length)):t);skipChars=0;}else it+=t;}
-    interimTxt=it;clearTimeout(dT);dT=setTimeout(aiTurn,550);   // dispara 0,5s depois da última palavra, sem esperar o Chrome fechar a frase
+    lastResultAt=Date.now();interimTxt=it;if(!busy)$('st').textContent='🎤 '+((it||heard).trim().slice(-34)||'ouvindo');clearTimeout(dT);dT=setTimeout(aiTurn,550);   // dispara 0,5s depois da última palavra, sem esperar o Chrome fechar a frase
   };
   rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){recOn=false;aiMsg('Microfone bloqueado. Abra o arquivo por https ou localhost e permita o microfone.');}};
   rec.onend=()=>{if(recOn&&ai.on){setTimeout(()=>{try{rec.start();}catch(e){}},150);}};
   recOn=true;try{rec.start();}catch(e){}$('st').textContent='🎤 ouvindo';return true;
 }
+setInterval(()=>{   // ouve sempre: dispara assim que há fala nova, sem depender de novo evento do microfone
+  if(!ai.on)return;
+  if(!busy)aiTurn();
+  if(recOn&&Date.now()-lastResultAt>45000){lastResultAt=Date.now();try{rec.stop();}catch(e){}}   // microfone mudo há 45s: reinicia (onend religa)
+},700);
 function setAi(on){
   if(on&&!ai.key){aiMsg('Cole a chave da API primeiro.');return false;}
   ai.on=on;

@@ -170,7 +170,7 @@ let ai={on:false,prov:'gemini',key:'',ctx:'',model:''},heard='',sent=0,busy=fals
 try{Object.assign(ai,JSON.parse(localStorage.getItem(AIKEY)||'{}'));ai.on=false;}catch(e){}
 const saveAi=()=>{try{localStorage.setItem(AIKEY,JSON.stringify({prov:ai.prov,key:ai.key,ctx:ai.ctx,model:ai.model}));}catch(e){}};
 const aiMsg=t=>{$('aiSt').textContent=t;};
-const GAP={calmo:20,normal:10,agitado:5};
+const GAP={calmo:14,normal:8,agitado:5};
 let retryT=null;
 function sysPrompt(){
   const names=[...enabled].map(i=>NAMES[i][0]).join(', ');
@@ -185,51 +185,89 @@ Usuários disponíveis: ${names}.
 Contexto da live: ${ai.ctx||'(não informado)'}.
 Responda APENAS um array JSON, de 3 a 6 itens: [{"u":"Nome_Do_Usuario","t":"mensagem"}]`;
 }
+let q=[],pumping=false,lastShow=0,lastGap=0,firstOfBatch=true,interimTxt='',skipChars=0,dT=null;
+function extract(buf,from){const out=[],re=/\{[^{}]*\}/g;re.lastIndex=from;let m,last=from;
+  while((m=re.exec(buf))){try{const o=JSON.parse(m[0]);if(o&&o.t)out.push(o);last=re.lastIndex;}catch(e){}}return [out,last];}
+function schedScript(){clearTimeout(timer);const [a,b]=PACES[pace];timer=setTimeout(play,rnd(a,b)*1000+20000);}   // roteiro só volta se você ficar calado
+function enqueue(m){q.push(m);pump();}
+function pump(){
+  if(pumping||!q.length)return;pumping=true;
+  const m=q[0],w=Math.max(0,lastGap-(Date.now()-lastShow));
+  setTimeout(()=>{
+    pumping=false;if(paused||!started)return;
+    q.shift();
+    let p=NAMES.findIndex(n=>n[0]===m.u);if(p<0||!enabled.has(p))p=pickP();else lastP=p;
+    const t=String(m.t).trim().replace(/[.]+$/,'');addMsg(p,t);recent.push(NAMES[p][0]+': '+t);if(recent.length>30)recent.shift();
+    if(firstOfBatch&&vibrate){try{navigator.vibrate&&navigator.vibrate(40);}catch(e){}}firstOfBatch=false;
+    lastShow=Date.now();lastGap=Math.min(1700,350+t.length*42)+rnd(0,300);
+    schedScript();pump();
+  },w);
+}
+function geminiBody(model,user,think){
+  const g={temperature:1,maxOutputTokens:260,responseMimeType:'application/json'};
+  if(think){if(/gemini-3/.test(model))g.thinkingConfig={thinkingLevel:'minimal'};else if(/2\.5/.test(model))g.thinkingConfig={thinkingBudget:0};}
+  return JSON.stringify({systemInstruction:{parts:[{text:sysPrompt()}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:g});
+}
+async function geminiStream(model,user){
+  const url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':streamGenerateContent?alt=sse';
+  let r,think=true;
+  for(let t=0;t<3;t++){
+    r=await fetch(url,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':ai.key},body:geminiBody(model,user,think)});
+    if(r.ok)break;
+    if(r.status===400&&think){think=false;continue;}                 // modelo não aceita o parâmetro de raciocínio: tenta sem
+    if(r.status===503||r.status===500){await new Promise(x=>setTimeout(x,600));continue;}   // Gemini sobrecarregado: tenta de novo rápido
+    break;
+  }
+  if(!r.ok)throw new Error('HTTP '+r.status+(r.status===429?' limite gratuito':r.status===404?' modelo não existe':r.status===503?' Gemini sobrecarregado':r.status===400||r.status===403?' chave/modelo':''));
+  const rd=r.body.getReader(),dec=new TextDecoder();let sb='',acc='',idx=0,n=0;
+  for(;;){
+    const {done,value}=await rd.read();if(done)break;
+    sb+=dec.decode(value,{stream:true});let k;
+    while((k=sb.indexOf('\n'))>=0){const line=sb.slice(0,k).trim();sb=sb.slice(k+1);
+      if(!line.startsWith('data:'))continue;
+      try{const j=JSON.parse(line.slice(5));acc+=((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(x=>x.text||'').join('');}catch(e){}}
+    const [o,l]=extract(acc,idx);idx=l;
+    for(const x of o){if(n<6){n++;enqueue(x);}}      // cada mensagem aparece assim que o JSON dela fecha, sem esperar a resposta toda
+  }
+  return n;
+}
 async function aiTurn(){
   if(!ai.on||busy||!ai.key)return;
-  const text=heard.slice(sent).trim();
-  if(text.length<12)return;
+  const text=(heard.slice(sent)+' '+interimTxt).trim();
+  if(text.length<10)return;
   const wait=GAP[pace]*1000-(Date.now()-lastCall);
-  if(wait>0){clearTimeout(retryT);retryT=setTimeout(aiTurn,wait+50);return;}   // antes a fala era perdida até a próxima; agora tenta de novo sozinho
-  busy=true;lastCall=Date.now();sent=heard.length;aiMsg('IA pensando…');$('st').textContent='💭 pensando…';
+  if(wait>0){clearTimeout(retryT);retryT=setTimeout(aiTurn,wait+50);return;}
+  busy=true;lastCall=Date.now();sent=heard.length;skipChars=interimTxt.length;interimTxt='';
+  clearTimeout(timer);firstOfBatch=true;aiMsg('IA pensando…');$('st').textContent='💭 pensando…';
+  if(Math.random()<.6)enqueue({u:'',t:FILL[Math.floor(Math.random()*FILL.length)]});   // reação instantânea enquanto a IA pensa
   try{
-    const user='Chat recente:\n'+(recent.slice(-12).join('\n')||'(vazio)')+'\n\nO streamer acabou de falar: "'+text.slice(-500)+'"';
-    const model=ai.model||DEF[ai.prov];let raw='';
-    if(ai.prov==='gemini'){
-      const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':ai.key},
-        body:JSON.stringify({systemInstruction:{parts:[{text:sysPrompt()}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{temperature:1,maxOutputTokens:400,responseMimeType:'application/json'}})});
-      if(!r.ok)throw new Error('HTTP '+r.status+(r.status===429?' limite gratuito':r.status===404?' modelo não existe':r.status===400||r.status===403?' chave/modelo':''));
-      const j=await r.json();raw=(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts||[]).map(x=>x.text||'').join('');
-    }else{
+    const user='Chat recente:\n'+(recent.slice(-10).join('\n')||'(vazio)')+'\n\nO streamer acabou de falar: "'+text.slice(-400)+'"';
+    const model=ai.model||DEF[ai.prov];let n=0;
+    if(ai.prov==='gemini')n=await geminiStream(model,user);
+    else{
       const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':ai.key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model,max_tokens:400,system:sysPrompt(),messages:[{role:'user',content:user}]})});
+        body:JSON.stringify({model,max_tokens:300,system:sysPrompt(),messages:[{role:'user',content:user}]})});
       if(!r.ok)throw new Error('HTTP '+r.status);
-      const j=await r.json();raw=(j.content&&j.content[0]&&j.content[0].text)||'';
+      const j=await r.json();const raw=(j.content&&j.content[0]&&j.content[0].text)||'';
+      const [o]=extract(raw,0);o.slice(0,6).forEach(x=>{n++;enqueue(x);});
     }
-    const arr=JSON.parse(raw.slice(raw.indexOf('['),raw.lastIndexOf(']')+1));
-    playAi(arr.filter(m=>m&&m.t).slice(0,6));aiMsg('IA ligada · ouvindo');$('st').textContent='🎤 ouvindo';
-  }catch(e){aiMsg('Erro da IA ('+e.message+'). Usando o roteiro.');$('st').textContent='⚠ IA falhou: '+e.message;}
+    if(!n)throw new Error('resposta vazia');
+    aiMsg('IA ligada · ouvindo');$('st').textContent='🎤 ouvindo';
+  }catch(e){aiMsg('Erro da IA ('+e.message+'). Usando o roteiro.');$('st').textContent='⚠ IA falhou: '+e.message;schedScript();}
   busy=false;
-}
-function playAi(arr){
-  clearTimeout(timer);let i=0;
-  (function step(){
-    if(paused||!started)return;
-    const m=arr[i];let p=NAMES.findIndex(n=>n[0]===m.u);if(p<0||!enabled.has(p))p=pickP();
-    const t=String(m.t).trim().replace(/[.]+$/,'');addMsg(p,t);recent.push(NAMES[p][0]+': '+t);if(recent.length>30)recent.shift();
-    if(i===0&&vibrate){try{navigator.vibrate&&navigator.vibrate(40);}catch(e){}}
-    i++;
-    if(i<arr.length)timer=setTimeout(step,Math.min(2600,500+(arr[i].t||'').length*55)+rnd(0,500));
-    else{const [a,b]=PACES[pace];timer=setTimeout(play,rnd(a,b)*1000+20000);}   // roteiro só volta se você ficar calado um tempo
-  })();
 }
 function startMic(){
   const seguro=location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
   if(!seguro)aiMsg('⚠ Página sem https: o Chrome vai pedir o microfone várias vezes. Hospede em https (ex.: GitHub Pages) pra pedir só uma vez.');
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){aiMsg('Este navegador não tem reconhecimento de voz (use Chrome).');return false;}
-  rec=new SR();rec.lang='pt-BR';rec.continuous=true;rec.interimResults=false;
-  rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal)heard+=' '+e.results[i][0].transcript;aiTurn();};
+  rec=new SR();rec.lang='pt-BR';rec.continuous=true;rec.interimResults=true;
+  rec.onresult=e=>{
+    let it='';
+    for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i],t=r[0].transcript;
+      if(r.isFinal){heard+=' '+(skipChars?t.slice(Math.min(skipChars,t.length)):t);skipChars=0;}else it+=t;}
+    interimTxt=it;clearTimeout(dT);dT=setTimeout(aiTurn,550);   // dispara 0,5s depois da última palavra, sem esperar o Chrome fechar a frase
+  };
   rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){recOn=false;aiMsg('Microfone bloqueado. Abra o arquivo por https ou localhost e permita o microfone.');}};
   rec.onend=()=>{if(recOn&&ai.on){setTimeout(()=>{try{rec.start();}catch(e){}},150);}};
   recOn=true;try{rec.start();}catch(e){}$('st').textContent='🎤 ouvindo';return true;

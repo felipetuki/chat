@@ -12,7 +12,7 @@ html,body{height:100%;background:#0e0e12;color:#f2f2f5;font-family:system-ui,-ap
 .m b{color:var(--c);font-weight:700;margin-right:8px}
 .m.old{opacity:.55}.m.older{opacity:.3}
 .tip{margin-top:14px;padding:14px 16px;border-radius:16px;background:linear-gradient(135deg,#3a2a00,#4a3300);border:2px solid #ffc83d;box-shadow:0 0 24px #ffc83d44;animation:in .25s ease-out}
-.tip small{display:block;color:#ffc83d;font-weight:700;font-size:13px;letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px}
+.tip small{display:block;color:#ffc83d;font-weight:800;font-size:clamp(24px,6.8vw,38px);line-height:1.15;text-transform:uppercase;margin-bottom:6px}
 .tip span{display:block;font-size:clamp(24px,6.8vw,38px);line-height:1.22;font-weight:600;color:#fff6dc}
 .tip.old{opacity:.8}.tip.older{opacity:.45}
 details{margin-top:10px}summary{color:#8d8d99;font-size:14px;margin-bottom:8px}
@@ -277,7 +277,7 @@ const TOPICS=[
 "conta de uma mistura de bebidas que só você aprova",
 "fala do copo, caneca ou garrafa que você não troca por nada",
 "descreve a bebida que combina com a vibe da live agora"]],
-["🥩","Churrasco e comida em família",[
+["🥩","Churrasco e família",[
 "descreve o churrasco ideal: carne, música e gente",
 "conta quem é o rei da churrasqueira na sua família",
 "fala da comida de Natal que nunca pode faltar",
@@ -332,7 +332,7 @@ const TOPICS=[
 "conta de um barulho estranho em casa que te assustou",
 "descreve a trilha sonora que te dá calafrio",
 "fala do filme de terror que você recomendaria pra quem tem coragem"]],
-["📱","Jogos de celular e casuais",[
+["📱","Jogos de celular",[
 "conta qual jogo de celular você já abandonou e voltou",
 "fala do joguinho que você joga sem perceber o tempo passar",
 "lembra de um jogo viciante de anos atrás que sumiu",
@@ -486,7 +486,7 @@ const TOPICS=[
 "conta de uma comida que você só provou viajando",
 "fala do hotel, pousada ou casa onde você ficou e nunca esqueceu",
 "descreve a vista mais bonita que você já viu"]],
-["🏙️","Sua cidade e seus lugares",[
+["🏙️","Sua cidade",[
 "fala do que você mais gosta na sua cidade",
 "conta de um lugar escondido que só quem mora ali conhece",
 "descreve o caminho que você mais faz no dia a dia",
@@ -541,7 +541,7 @@ const TOPICS=[
 "conta da profissão que você sonhava ter quando criança",
 "fala do que mais te cansa e do que mais te anima numa rotina",
 "descreve como seria seu escritório ou ambiente ideal"]],
-["🛍️","Dinheiro, compras e Black Friday",[
+["🛍️","Black Friday e compras",[
 "conta a melhor compra que você já fez e valeu cada centavo",
 "fala do que você está de olho pra comprar na Black Friday",
 "descreve a promoção ou oferta que você nunca esquece",
@@ -673,7 +673,7 @@ const TOPICS=[
 "conta de uma coincidência de nomes, datas ou lugares",
 "fala do número ou objeto que você considera da sorte",
 "descreve a história de algo que quase deu errado e deu certo"]],
-["🤔","E se... hipóteses",[
+["🤔","E se...",[
 "imagina que você acorda com um dia extra na semana: o que faz?",
 "fala do que você faria se pudesse viver 24 horas em qualquer jogo",
 "conta como seria um mundo onde todo mundo fala a verdade",
@@ -750,7 +750,7 @@ const TOPICS=[
 "conta do assunto que você pesquisa quando está sem sono",
 "fala de um erro que te ensinou muito",
 "descreve como você aprende melhor: vendo, ouvindo ou fazendo"]],
-["🎄","Fim de ano, Natal e festas",[
+["🎄","Fim de ano e Natal",[
 "fala do que você mais espera do fim de ano",
 "conta como é a sua ceia ou o Natal na sua casa",
 "descreve a decoração de Natal que você mais gosta",
@@ -761,7 +761,7 @@ const TOPICS=[
 "conta de uma tradição maluca que você ou sua família tem",
 "fala da trilha sonora de festa de fim de ano que não pode faltar",
 "descreve o que você pediria de presente se pudesse pedir qualquer coisa"]],
-["🎥","Sobre a live e o canal",[
+["🎥","A live e o canal",[
 "fala do que você mais gosta de fazer na live",
 "conta um momento engraçado que já aconteceu aqui",
 "descreve como você imagina o canal daqui a um ano",
@@ -801,9 +801,8 @@ function showTopic(){
   const id=pickTopic();if(id===null)return;
   const c=TOPICS[Math.floor(id/10)],text=c[2][id%10];
   const f=$('feed'),d=document.createElement('div');d.className='tip';
-  const sm=document.createElement('small');sm.textContent='💡 tópico · '+c[0]+' '+c[1];
-  const sp=document.createElement('span');sp.textContent=text;
-  d.appendChild(sm);d.appendChild(sp);f.appendChild(d);
+  const sp=document.createElement('span');sp.textContent=c[1]+': '+text;   // categoria e frase na mesma formatação
+  d.appendChild(sp);f.appendChild(d);
   const all=[...f.children];while(all.length>7)f.removeChild(all.shift());
   const n=f.children.length;[...f.children].forEach((x,i)=>{x.classList.toggle('old',i===n-3);x.classList.toggle('older',i<n-3);});
   recent.push('[tópico sugerido ao streamer] '+text);if(recent.length>30)recent.shift();
